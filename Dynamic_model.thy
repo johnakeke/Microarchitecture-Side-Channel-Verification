@@ -37,7 +37,6 @@ begin
     lemma reachable_s0 : "reachable0 s0"
       by (metis SM.reachable_def SM_axioms reachable0_def run.simps(1)) 
 
-    
     lemma reachable_self : "reachable s s"
       using reachable_def run.simps(1) by fastforce
 
@@ -136,14 +135,11 @@ locale SM_enabled = SM s0 step domain vpeq interferes
        vpeq :: "'s \<Rightarrow> 'd \<Rightarrow> 's \<Rightarrow> bool"  ("(_ \<sim> _ \<sim> _)") and
        interferes :: "'d \<Rightarrow> 's \<Rightarrow> 'd \<Rightarrow> bool" ("(_ @ _ \<leadsto>_)")
   +
-  
     assumes enabled0: "\<forall>s a. reachable0 s \<longrightarrow> (\<exists> s'. s' = step s a)"
     and   policy_respect: "\<forall>v u s t. (s \<sim> u \<sim> t)
                               \<longrightarrow> (interferes v s u = interferes v t u)"
    
 begin
-
-
 
     lemma enabled : "reachable0 s \<Longrightarrow> (\<exists> s'. s' = step s a)"
         using enabled0 by simp
@@ -155,8 +151,6 @@ begin
     declare sources_Nil [simp del]
     declare sources_Cons [simp del]
 
-    
-    
     primrec ipurge :: "'e list \<Rightarrow> 'd \<Rightarrow> 's  \<Rightarrow> 'e list" where
       ipurge_Nil:   "ipurge [] u s = []" |
       ipurge_Cons:  "ipurge (a#as) u s = (if (the (domain a) \<in> (sources (a#as) u s))
@@ -307,7 +301,6 @@ subsection\<open>Lemmas for the inference framework \<close>
       using enabled reachableStep  
         by metis
      
-
     lemma lemma_1_sub_1 : "\<lbrakk>reachable0 s ;
                        dynamic_local_respect;
                        the (domain a) \<notin> sources (a # as) u s;
@@ -982,8 +975,6 @@ subsection \<open> Interference framework of information flow security propertie
 
     theorem nonintf_r_and_nonlk_eq_strnoninfl: "(noninterference_r \<and> nonleakage) = noninfluence"
       using nonintf_r_and_nonlk_impl_noninfl noninf_impl_nonintf_r noninf_impl_nonlk by blast 
-
-
 
 end
 

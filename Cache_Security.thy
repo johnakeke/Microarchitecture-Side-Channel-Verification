@@ -1,12 +1,13 @@
 theory Cache_Security
-
+imports Cache_Model
 begin
+
+subsection{*Top layer state machine*}
 
 datatype Process_Config = ProConf process_id process_name
 type_synonym process = "process_id \<rightharpoonup> Process_Config"
 
 record Sys_Config = processconf :: process
-                    scheduler :: process_id
 
 primrec get_processid :: "Process_Config \<Rightarrow> process_id"
   where "get_processid (ProConf pid _) = pid"
@@ -17,30 +18,24 @@ primrec get_processname :: "Process_Config \<Rightarrow> process_name"
 definition is_a_process :: "Sys_Config \<Rightarrow> process_id \<Rightarrow> bool"
   where "is_a_process sc pid \<equiv> (processconf sc) pid \<noteq> None"
 
-definition is_a_scheduler :: "Sys_Config \<Rightarrow> process_id \<Rightarrow> bool"
-  where "is_a_scheduler sc nid \<equiv> (scheduler sc) = nid"
-
 definition get_proconf_byid :: "Sys_Config \<Rightarrow> process_id \<Rightarrow> Process_Config option"
   where "get_proconf_byid sc pid \<equiv> (processconf sc) pid"
 
-definition sys_config_witness :: Sys_Config 
-  where "sys_config_witness \<equiv> \<lparr>processconf = Map.empty,
-                               scheduler = 0\<rparr>"
+definition sys_config_witness :: Sys_Config
+  where "sys_config_witness \<equiv> \<lparr>processconf = Map.empty\<rparr>"
 
 consts sysconf :: "Sys_Config"
 specification(sysconf)
-  process_id_conf: "\<forall>p. (processconf sysconf) p \<noteq> None \<longrightarrow> get_processid (the ((processconf sysconf) p)) = p"
-  process_not_sch: "\<forall>p. (processconf sysconf) p \<noteq> None \<longrightarrow> p \<noteq> scheduler sysconf"
-  sch_not_process: "scheduler sysconf = x \<longrightarrow> (processconf sysconf) x = None"
-  using sys_config_witness_def
-  by (metis Sys_Config.select_convs(1))
+  process_id_conf: "\<forall>p. get_proconf_byid sysconf p \<noteq> None
+                        \<longrightarrow> get_processid (the (get_proconf_byid sysconf p)) = p"
+  process_diff: "\<forall>P1 P2. P1 \<noteq> P2 \<longrightarrow> get_processid P1 \<noteq> get_processid P2"
+  using sys_config_witness_def get_proconf_byid_def
+  sorry
 
 record State = current :: process_id
                content :: cache
                mapping :: index_mapping
 
-definition Schedule :: "Sys_Config \<Rightarrow> State \<Rightarrow> State set"
-  where "Schedule sc s \<equiv> {s\<lparr>current:= SOME p. p\<in>{x. (processconf sc) x \<noteq> None}\<rparr>}"
 
 definition Access :: "Sys_Config \<Rightarrow> State \<Rightarrow> ca_index \<Rightarrow> ca_tag \<Rightarrow> State"
   where "Access sc s ci ct \<equiv>

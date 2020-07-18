@@ -2,7 +2,7 @@ theory Cache_Model
 imports Main
 begin
 
-subsection{*Top layer: cache structure and mapping*}
+subsection{*Top layer: cache structure and security access function*}
 
 typedecl process_id
 typedecl process_name
@@ -36,6 +36,12 @@ consts C:: cache
 specification(C)
   "\<forall>c1 c2. c1 \<in> C \<and> c2 \<in> C \<and> c1 \<noteq> c2 \<longrightarrow> \<not> (set c1 = set c2 \<and> way c1 = way c2)"
   by auto
+
+definition security_access_line :: "process_id \<Rightarrow> cache \<Rightarrow> cache \<Rightarrow> bool"
+  where "security_access_line pid B B' \<equiv> B = B' \<or>
+                                         (\<exists>b b'. B' = B - {b} \<union> {b'} \<longrightarrow> owner b = Some pid \<and> owner b' = Some pid)"
+
+subsection{*Middle layer: public operations*}
 
 type_synonym index_mapping = "indexbits \<rightharpoonup> ca_index"
 
@@ -79,7 +85,13 @@ definition get_randomsalt_mapping :: "addr \<Rightarrow> randomsalt \<Rightarrow
 definition get_randomsalt_mapping_set :: "addr \<Rightarrow> randomsalt set \<Rightarrow> randomsalt_mapping \<Rightarrow> cache_line set \<Rightarrow> cache_line set"
   where "get_randomsalt_mapping_set D rs rsm B \<equiv> {l. \<exists> r. r \<in> rs \<and> l \<in> get_randomsalt_mapping D r rsm B}"
 
-subsection{*Middle layer: public operations*}
+type_synonym way_mapping = "process_id \<rightharpoonup> (ca_way set \<times> ca_way set)"
+
+definition get_way_mapping_private :: "process_id \<Rightarrow> way_mapping \<Rightarrow> cache_line set \<Rightarrow> cache_line set"
+  where "get_way_mapping_private pid wm B \<equiv> {l. l \<in> B \<and> way l \<in> fst (the (wm pid))}"
+
+definition get_way_mapping_shared :: "process_id \<Rightarrow> way_mapping \<Rightarrow> cache_line set \<Rightarrow> cache_line set"
+  where "get_way_mapping_shared pid wm B \<equiv> {l. l \<in> B \<and> way l \<in> snd (the (wm pid))}"
 
 definition probe_tag :: "tagbits \<Rightarrow> cache_line \<Rightarrow> bool"
   where "probe_tag tb c \<equiv> tb = tag c"
@@ -140,15 +152,24 @@ definition sp_access_line :: "process_id \<Rightarrow> addr \<Rightarrow> proces
                 m' = update_line pid m in
             B - {m} \<union> {m'}"
 
-definition sp_evict_line :: "process_id \<Rightarrow> addr \<Rightarrow> process_mapping \<Rightarrow> cache \<Rightarrow> cache"
-  where "sp_evict_line pid D pm B \<equiv>
-          let cls = get_process_mapping pid (ix D) pm B in
-          if \<not> probe_line (ta D) cls then
-            B
+definition nomo_access_line :: "process_id \<Rightarrow> addr \<Rightarrow> index_mapping \<Rightarrow> way_mapping \<Rightarrow> cache \<Rightarrow> cache"
+  where "nomo_access_line pid D im wm B \<equiv>
+          let cls = get_index_mapping (ix D) im B;
+              cls_p = get_way_mapping_private pid wm cls;
+              cls_s = get_way_mapping_shared pid wm cls in
+          if \<not> probe_line (ta D) cls_p then
+            if \<not> probe_line (ta D) cls_s then
+              let b = SOME l. l \<in> cls_s;
+                b' = replace_line pid (ta D) b in
+              B - {b} \<union> {b'}
+            else
+              let n = get_line (ta D) cls_s;
+                  n' = update_line pid n in
+              B - {n} \<union> {n'}
           else
-            let b = get_line (ta D) cls;
-                b' = invalidate_line b in
-            B - {b} \<union> {b'}"
+            let m = get_line (ta D) cls_p;
+                m' = update_line pid m in
+            B - {m} \<union> {m'}"
 
 definition pl_access_line :: "process_id \<Rightarrow> addr \<Rightarrow> bool \<Rightarrow> index_mapping \<Rightarrow> cache \<Rightarrow> cache"
   where "pl_access_line pid D L im B \<equiv>
@@ -188,8 +209,10 @@ definition rp_access_line :: "process_id \<Rightarrow> addr \<Rightarrow> bool \
               let s = SOME ib. ib \<noteq> ix D;
                   cls' = get_process_mapping pid s pm B;
                   r = SOME l. l \<in> cls';
-                  r' = replace_line_lock pid (ta D) L r in
-              (B - {r} \<union> {r'}, swap_process_mapping pid (ix D) s pm)
+                  r' = replace_line_lock pid (ta D) L r;
+                  cls''= cls' - {r} \<union> {r'};
+                  B' = B - cls - cls'' \<union> invalidate_line_owner_set pid cls \<union> invalidate_line_owner_set pid cls'' in
+              (B', swap_process_mapping pid (ix D) s pm)
           else
             let m = get_line (ta D) cls;
                 m' = update_line_lock pid L m in
