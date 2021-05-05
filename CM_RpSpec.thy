@@ -16,7 +16,7 @@ datatype cachehit = Hit | Miss
 
 datatype secure = H | L
 
-datatype event = RP_READ | RP_WRITE
+datatype event = RP_READ
 
 (*Memory blocks*)
 record memory_request =
